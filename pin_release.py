@@ -7,10 +7,21 @@ import re
 from validate import validate_image_reference
 
 
+IMAGE_ANCHOR = re.compile(r"^x-app-image: &app-image\n  image: (\S+)$", re.MULTILINE)
+
+
+def image_reference(source: str) -> str:
+    """Read the single validated reference used by all application roles."""
+    matches = IMAGE_ANCHOR.findall(source)
+    if len(matches) != 1:
+        raise RuntimeError("Expected exactly one x-app-image anchor")
+    validate_image_reference(matches[0])
+    return matches[0]
+
+
 def pin(source: str, image: str) -> str:
     validate_image_reference(image)
-    updated, count = re.subn(r"^x-app-image: &app-image\n  image: \S+$",
-                             "x-app-image: &app-image\n  image: " + image, source, flags=re.MULTILINE)
+    updated, count = IMAGE_ANCHOR.subn("x-app-image: &app-image\n  image: " + image, source)
     if count != 1:
         raise RuntimeError("Expected exactly one x-app-image anchor")
     return updated

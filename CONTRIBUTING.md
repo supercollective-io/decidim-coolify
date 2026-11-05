@@ -37,7 +37,7 @@ Review linked instructions for assumed knowledge, competing setup paths and unex
 | Editable development environment | [bin/dev](bin/dev), [compose.development.yaml](compose.development.yaml) |
 | Check entry points and image selection | [bin/check](bin/check), [tools/image_checks.py](tools/image_checks.py) |
 | Deployment validation and runtime checks | [validate.py](validate.py), [tests/](tests/) |
-| CI and image publication | [images.yml](.github/workflows/images.yml) |
+| CI and image publication | [images.yml](.github/workflows/images.yml), [reusable image checks](.github/workflows/verify-image.yml) |
 
 `app/` is the Rails application hosting Decidim. Decidim itself comes from locked upstream gems and frontend packages. Normal builds use the committed application; they do not regenerate it. Ruby and Node base images are pinned by digest. Node and compilation tools are excluded from the production runtime image; the development image includes them.
 
@@ -99,7 +99,7 @@ bin/check full --platform linux/arm64
 
 Emulation is slower. Release CI retains native amd64 and ARM64 jobs and uses `bin/check image` against each built image. To verify an existing local image or published digest, use `bin/check image --image IMAGE_REFERENCE --platform linux/amd64`, replacing `IMAGE_REFERENCE` with the actual reference. A supplied image ID must already exist for the requested platform; a published reference can be pulled.
 
-Changes limited to root Markdown files and Markdown under `docs/` run documentation checks without building the application. All other changes, release tags and manual runs include quick checks and both container architectures. Use the always-running `CI` check for branch protection: it fails if change detection, documentation or required quick/container checks fail.
+Changes limited to root Markdown files and Markdown under `docs/` run documentation checks without building the application. Changes limited to `compose.yaml` and those documents run quick checks and verify the pinned registry image on both native architectures; they do not build or publish a new application image. All other changes, release tags and manual runs include quick checks and new builds on both architectures. Use the always-running `CI` check for branch protection: it fails if change detection, documentation or required quick/container checks fail.
 
 The smoke test starts web, worker, scheduler, PostgreSQL and Redis in a uniquely named disposable project. It supplies its own settings; it does not read the project's `.env`. It checks migrations, administrator bootstrap, sign-in and organisation requests, health, assets, API documentation, scheduled tasks, worker processing and upload persistence. It verifies both missing and configured SMTP behaviour without sending real email. Each checkpoint reports elapsed time.
 
@@ -168,33 +168,39 @@ Use a development checkout with the target release's Ruby and Node versions, Bun
 
 ## Publishing a release
 
-For maintainers with repository and registry publishing access. Publish and pin each release once; collectives then pull the same prebuilt image. They do not run these steps. Publishing an image does not deploy it.
+Application changes merged into `main` automatically produce tested images and one release-selection PR. Collectives pull the shared image; they do not build or publish it. Image publication and merging the PR do not deploy a running installation.
 
-1. Make the repository available on GitHub. The workflow derives its GHCR image name from the repository owner and name.
-2. Once this workflow is on the default branch, run **Container image → Run workflow** on the reviewed source revision, or push a reviewed `v*` release tag. Wait for both architecture test jobs and the publication job to succeed. The workflow publishes a commit SHA tag, an SBOM and provenance; version-tag runs also publish the version tag. Pushes to `main` only build and test. The `.dockerbuild` artefacts are diagnostic build records, not pullable images.
-3. Make the package public so collectives can pull it without registry credentials. For a private pilot, configure registry access in Coolify instead.
-4. Copy the complete `ghcr.io/OWNER/REPOSITORY@sha256:…` reference from the workflow summary. Set `SMOKE_IMAGE` to that actual reference and run `tests/smoke.py` for each supported architecture, setting `SMOKE_PLATFORM` accordingly. The example ellipsis is not a usable digest.
-5. Dependabot checks for new versions on its daily weekday schedule and opens a PR updating the shared image's version tag and digest. Review the release notes, published-image smoke results and PR checks, then merge it. No image reference needs copying into Compose. The `deployment-compose` artefact remains available for a standalone installation. This deployment commit does not need another image-release tag.
-6. Give the person applying the update the repository URL, deployment branch, exact deployment commit and release notes. Include required settings or migration actions. They follow the [manual deployment procedure](docs/OPERATIONS.md#deploying-a-reviewed-upgrade).
+### Configure release automation
 
-### Completing the organisation transfer
+Repository maintainers complete this setup once:
 
-The repositories now belong to `supercollective-io`. The existing image pin remains under `ghcr.io/jokroese/decidim-coolify` until a replacement is published and verified. GitHub repository redirects do not move GHCR packages between owners.
+1. In the repository's **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. An organisation policy may need to permit this setting. The workflow uses the built-in `GITHUB_TOKEN` with Contents and Pull requests write permissions only in the proposal job. No release App, client ID or private key is needed; the workflow does not approve or merge its own PRs.
+2. Keep review and the `CI` status check required on `main`. Allow the workflow to maintain its `update-application-image` PR branch. GitHub requires a person with repository write access to approve workflow runs triggered by the built-in token's PR creation or updates; see [GitHub's workflow-trigger guidance](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+3. Ensure Actions can publish the repository's GHCR package. Make the package public before accepting its first release-selection PR, so collectives and unprivileged PR checks can pull it anonymously. After the ownership transfer, the workflow publishes to `ghcr.io/supercollective-io/decidim-coolify`; the old image pin remains until the first reviewed update is merged.
 
-1. Check the organisation allows the workflow to publish packages and that the required `CI` check remains enabled in branch protection. Publish a reviewed versioned release using the procedure above.
-2. Make `ghcr.io/supercollective-io/decidim-coolify` public and verify pulls without registry credentials. Verify the published digest on both supported architectures.
-3. Use `python3 pin_release.py IMAGE_REFERENCE` with the complete new version tag and verified digest from the publication artefact. Run `bin/check quick` and review the Compose change before merging. This first namespace change is manual: Dependabot updates versions within a package, not its owner. Its configuration already selects the new namespace.
-4. Keep the old public package and pinned digests available for existing installations and rollback. Follow [the installation transfer procedure](docs/OPERATIONS.md#repository-ownership-change) for existing Coolify applications.
+Dependabot maintains GitHub Actions versions and commit pins on its weekly schedule. It no longer discovers this project's application image: the publication workflow already knows the exact tested digest. PostgreSQL, Redis and application dependency upgrades remain separate work.
 
-### Automatic image updates
+### Review and select an image
 
-[Dependabot](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependabot-version-updates) is GitHub's maintained dependency-update service. The [.github/dependabot.yml](.github/dependabot.yml) configuration enables its Docker Compose support when present on the default branch. It checks only this project's application image; PostgreSQL and Redis upgrades remain separate maintenance work. It needs no custom updater, personal access token or extra GitHub Actions write permissions.
+1. Merge the reviewed application change into `main`. The workflow builds native amd64 and ARM64 candidate images with source metadata, SBOMs and provenance. Candidate tags contain the workflow run, attempt and architecture; their presence in GHCR does not establish a successful release.
+2. Wait for quick checks and both registry-digest smoke tests to pass. Docker Buildx assembles the tested architecture images without rebuilding application layers, then publishes `sha-<full-source-commit>`. The workflow summary records the immutable digest. A failed architecture check prevents release publication and a new update proposal.
+3. Review the automated **build(coolify): select tested application image** PR. It updates only the shared image reference in `compose.yaml`, names the source revision and links the successful publication run. Later successful builds update the same PR. Click **Approve workflows to run** on the PR when GitHub requests it, including after automated updates. Its checks verify the selected digest against the current Compose configuration on both architectures. Review the application changes and document migration or configuration requirements before merging.
+4. Merge the PR after its checks and review pass. The resulting deployment commit selects the image for new installations and upgrades. An image-selection commit does not publish another image. Application source on `main` may be newer than the selected image; use the image's source tag and PR evidence to determine what is included.
+5. Give the person applying the update the exact deployment commit and release notes, including required settings and migration actions. Follow the [manual deployment procedure](docs/OPERATIONS.md#deploying-a-reviewed-upgrade). Keep Coolify Auto Deploy disabled.
 
-Publish versioned tags such as `v0.1.0-rc.2` or `v0.1.0` for updates to be discoverable. Commit-SHA tags from manual publication are available for testing and do not define a release sequence. Keep both the readable version tag and immutable digest in Compose: Dependabot uses the tag to identify newer versions and updates the digest with it. The shared mapping keeps all three application roles on the same image.
+The workflow uses Docker's official build and metadata actions, Buildx manifest assembly and [Create Pull Request](https://github.com/peter-evans/create-pull-request). The only repository-specific edit is the validated shared image anchor in `pin_release.py`. The automation branch is an ordinary PR branch, not a deployment branch; Coolify continues to read reviewed revisions on `main`.
 
-Dependabot preserves Docker tag families. While this pilot uses `-rc`, it follows later `-rc` tags. Moving to the first stable release is one reviewed change to the version and digest in the shared mapping; subsequent stable releases are proposed automatically. See [Dependabot’s tag policy](https://github.com/dependabot/dependabot-core/tree/main/docker#supported-tag-schemas).
+### Retries, manual builds and version tags
 
-Checks run daily on weekdays; publication does not create a PR immediately. This project's own image is excluded from Dependabot's cooldown because publication already requires both architecture tests. To check sooner or inspect a failure, open **Insights → Dependency graph → Dependabot**, select the Docker Compose update job and use **Check for updates**. Dependabot PRs run the normal pull-request CI. Review and merging remain required; Coolify deployment remains manual.
+Use **Container image → Run workflow** on `main` to publish and propose the current source again, including after enabling PR creation or making the package public. A rerun may produce a different digest because build-time operating-system packages can change; digests, rather than SHA tags alone, identify exact image contents. Existing deployed digests remain unchanged.
+
+Manual runs on other branches and `v*` tag pushes also build, test and publish images, but do not update the release-selection PR. Version-tag runs add the version tag alongside the source tag. These are explicit publication operations, not automatic selection of an older release for `main`.
+
+Publication uploads a `deployment-compose` workflow artefact containing the source revision's Compose definition pinned to its published digest. Download it for inspection or recovery while it remains available; it is not the primary installation route. `.dockerbuild` artefacts are diagnostic records, not pullable images.
+
+If publication succeeds but PR creation fails, the workflow remains failed and the committed deployment pin is unchanged. Fix the reported permissions or configuration and rerun. If application source has advanced, the old run leaves the update PR unchanged; allow the newer build to finish. Documentation-only and Compose-only commits do not invalidate an application build, and the PR checks still verify the current configuration. Concurrent proposal jobs are serialised.
+
+Do not delete images used by installations or recovery records. Candidate and release images accumulate in GHCR; this change does not introduce automatic registry cleanup. Local and CI smoke tests do not establish Coolify routing, real email delivery or recovery.
 
 ## Technical references
 

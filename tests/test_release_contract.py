@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from pin_release import pin
+from pin_release import image_reference, pin
 
 spec = importlib.util.spec_from_file_location("deployment_validation", ROOT / "validate.py")
 validation = importlib.util.module_from_spec(spec)
@@ -35,6 +35,17 @@ class ReleaseImageTests(unittest.TestCase):
 
 
 class ReleasePinTests(unittest.TestCase):
+    def test_read_selected_digest_after_pinning(self):
+        image = "ghcr.io/example/decidim:sha-" + "c" * 40 + "@sha256:" + "b" * 64
+        source = pin((ROOT / "compose.yaml").read_text(), image)
+        self.assertEqual(image_reference(source), image)
+
+    def test_read_rejects_missing_duplicate_or_mutable_selection(self):
+        anchor = "x-app-image: &app-image\n  image: ghcr.io/example/decidim:latest\n"
+        for source in ("services: {}", anchor, anchor + anchor):
+            with self.subTest(source=source), self.assertRaises(RuntimeError):
+                image_reference(source)
+
     def test_pinning_changes_only_the_image_anchor(self):
         source = (ROOT / "compose.yaml").read_text()
         image = "ghcr.io/example/decidim:v0.2.0@sha256:" + "b" * 64
