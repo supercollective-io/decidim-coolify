@@ -205,7 +205,7 @@ jobs:
             --metadata-file "$RUNNER_TEMP/published.json" \
             "$(cat "$RUNNER_TEMP/digests/amd64")" \
             "$(cat "$RUNNER_TEMP/digests/arm64")"
-          digest=$(jq -er '.["containerimage.digest"]' "$RUNNER_TEMP/published.json")
+          digest=$(jq -er '.["containerimage.descriptor"].digest' "$RUNNER_TEMP/published.json")
           docker buildx imagetools inspect "$IMAGE_NAME@$digest" --raw > "$RUNNER_TEMP/manifest.json"
           jq -e '[.manifests[].platform | select(.os == "linux") | .architecture] | sort == ["amd64", "arm64"]' "$RUNNER_TEMP/manifest.json"
           image="$IMAGE_NAME:sha-$GITHUB_SHA@$digest"
