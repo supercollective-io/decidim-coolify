@@ -146,7 +146,12 @@ jobs:
   publish:
     name: Publish tested multi-architecture image
     needs: [changes, ci, candidates]
-    if: needs.changes.outputs.images == 'true' && needs.changes.outputs.publish == 'true'
+    # CI has intentionally skipped ancestors. Override the implicit success()
+    # check, but require every publication prerequisite to have succeeded.
+    if: >-
+      ${{ !cancelled() && needs.changes.result == 'success' &&
+          needs.ci.result == 'success' && needs.candidates.result == 'success' &&
+          needs.changes.outputs.images == 'true' && needs.changes.outputs.publish == 'true' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -222,7 +227,8 @@ jobs:
     name: Propose the tested image on main
     needs: publish
     # Tags and manual builds on other branches publish for testing only.
-    if: github.ref == 'refs/heads/main'
+    # Skipped ancestors must not suppress a successful main publication's PR.
+    if: ${{ !cancelled() && needs.publish.result == 'success' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     concurrency:
       group: application-image-update-pr
