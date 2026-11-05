@@ -4,7 +4,7 @@ Help collectives set up and maintain Decidim with less technical work. Keep the 
 
 ## Project boundaries
 
-This repository owns the maintained deployment, editable development environment, build tools and regression tests. [Decidim Lab](https://github.com/jokroese/decidim-lab) owns research, comparative benchmarks and experiments. The lab records the product commit or image under investigation and reuses `bin/dev` and `bin/check`; it does not maintain a second product development stack.
+This repository owns the maintained deployment, editable development environment, build tools and regression tests. [Decidim Lab](https://github.com/supercollective-io/decidim-lab) owns research, comparative benchmarks and experiments. The lab records the product commit or image under investigation and reuses `bin/dev` and `bin/check`; it does not maintain a second product development stack.
 
 When an experiment becomes maintained behaviour, keep its implementation and regression tests here. Keep the investigation and comparative results in the lab. Workshop facilitation materials remain in decidim-fest-2026.
 
@@ -13,10 +13,16 @@ When an experiment becomes maintained behaviour, keep its implementation and reg
 Public images are available, but public routing, real email delivery and backup/recovery still need verification on a target Coolify installation. Passing local or CI tests does not establish deployment readiness. Before describing setup as self-service:
 
 1. Publish an image, test its digest and pin it in the deployment configuration.
-2. Follow the README on a clean Coolify installation. Record the Coolify version, server architecture and resource usage; correct missing or misleading steps.
+2. Follow the README on a clean installation with self-hosted Coolify and Decidim on one server. Start with the provisional Hetzner specification in the README. Record the Coolify version, server specification, architecture and combined resource usage; validate or revise the recommendation and correct missing or misleading steps.
 3. Complete organisation setup, real email delivery, upload persistence and background-job checks on that installation.
-4. Provide and verify a repeatable backup schedule, failure reporting, secret export and isolated recovery. Document what the collective must arrange and what the project provides.
-5. Ask someone outside the development team to follow the setup guide. Resolve the points where they need undocumented help.
+4. Provide and verify a repeatable backup schedule, failure reporting and secret export. Separately rehearse isolated recovery as a maintainer readiness check. Document routine backup setup for collectives and keep restore procedures in incident and maintenance guidance; do not make a recovery rehearsal part of every new installation.
+5. Ask a non-technical person outside the development team to follow the setup guide without a technical helper, including its links to Hetzner, Coolify, Namecheap and Resend documentation. Check that they can find the right upstream section, understand their next action and return to the Decidim instructions. Record hands-on time and unattended waiting separately for each stage, including routine backup setup, and revise the README's planning estimates from those observations. Treat any need for undocumented assistance as a gap to fix in the product or instructions.
+
+## Keep setup guidance maintainable
+
+Write for collective members setting up and maintaining their own site without assuming server administration experience. Prefer links to the recommended providers' own setup and maintenance instructions when they are accurate, concise and understandable for the intended reader. Link to the relevant section and say when to return to this guide. Keep this project's choices, Decidim settings and success checks here. Separate initial setup and routine backup checks from recovery after serious failures.
+
+Review linked instructions for assumed knowledge, competing setup paths and unexplained terms. If they are insufficient for a non-technical reader, add the smallest plain-language explanation or procedure needed to complete that part. Explain unfamiliar terms and provide concrete choices and completion checks. Where the product still lacks a guided procedure, record that gap and the work needed to close it; do not make an external expert a permanent prerequisite. Avoid copying upstream commands or entire guides that we would then need to maintain separately. A documentation review does not replace trying the route with its intended users.
 
 ## Find the code
 
@@ -115,7 +121,7 @@ For optional Ruby style and security checks, run the application's `bin/ci` insi
 | Development environment or command launchers | Quick checks plus clean startup, edits, restart and worktree-isolation checks |
 | Coolify setup, email or recovery | Complete the affected procedure on an isolated installation and record the result |
 
-Include the problem, resulting behaviour and any setup changes a collective must make in your contribution. Link the relevant [CI run](https://github.com/jokroese/decidim-coolify/actions/workflows/images.yml) for automated results. Record manual checks and remaining limits in the PR description or release notes; identify the tested revision/image and architecture for runtime or deployment checks. Keep durable procedures and known limitations in the relevant guide, rather than maintaining a test-run diary.
+Include the problem, resulting behaviour and any setup changes a collective must make in your contribution. Link the relevant [CI run](https://github.com/supercollective-io/decidim-coolify/actions/workflows/images.yml) for automated results. Record manual checks and remaining limits in the PR description or release notes; identify the tested revision/image and architecture for runtime or deployment checks. Keep durable procedures and known limitations in the relevant guide, rather than maintaining a test-run diary.
 
 ## Source and generated files
 
@@ -169,7 +175,16 @@ For maintainers with repository and registry publishing access. Publish and pin 
 3. Make the package public so collectives can pull it without registry credentials. For a private pilot, configure registry access in Coolify instead.
 4. Copy the complete `ghcr.io/OWNER/REPOSITORY@sha256:…` reference from the workflow summary. Set `SMOKE_IMAGE` to that actual reference and run `tests/smoke.py` for each supported architecture, setting `SMOKE_PLATFORM` accordingly. The example ellipsis is not a usable digest.
 5. Dependabot checks for new versions on its daily weekday schedule and opens a PR updating the shared image's version tag and digest. Review the release notes, published-image smoke results and PR checks, then merge it. No image reference needs copying into Compose. The `deployment-compose` artefact remains available for a standalone installation. This deployment commit does not need another image-release tag.
-6. Give the technical helper the repository URL, deployment branch, exact deployment commit and release notes. Include required settings or migration actions. They follow the [manual deployment procedure](docs/OPERATIONS.md#deploying-a-reviewed-upgrade).
+6. Give the person applying the update the repository URL, deployment branch, exact deployment commit and release notes. Include required settings or migration actions. They follow the [manual deployment procedure](docs/OPERATIONS.md#deploying-a-reviewed-upgrade).
+
+### Completing the organisation transfer
+
+The repositories now belong to `supercollective-io`. The existing image pin remains under `ghcr.io/jokroese/decidim-coolify` until a replacement is published and verified. GitHub repository redirects do not move GHCR packages between owners.
+
+1. Check the organisation allows the workflow to publish packages and that the required `CI` check remains enabled in branch protection. Publish a reviewed versioned release using the procedure above.
+2. Make `ghcr.io/supercollective-io/decidim-coolify` public and verify pulls without registry credentials. Verify the published digest on both supported architectures.
+3. Use `python3 pin_release.py IMAGE_REFERENCE` with the complete new version tag and verified digest from the publication artefact. Run `bin/check quick` and review the Compose change before merging. This first namespace change is manual: Dependabot updates versions within a package, not its owner. Its configuration already selects the new namespace.
+4. Keep the old public package and pinned digests available for existing installations and rollback. Follow [the installation transfer procedure](docs/OPERATIONS.md#repository-ownership-change) for existing Coolify applications.
 
 ### Automatic image updates
 
@@ -186,7 +201,7 @@ Checks run daily on weekdays; publication does not create a PR immediately. This
 - [Configuration](docs/CONFIGURATION.md): required values, defaults and generated credentials.
 - [Operations](docs/OPERATIONS.md): deployment, backups, recovery and maintenance checks.
 - [Organisation setup contract](docs/ORGANISATION-SETUP.md): behaviour, tests and local override responsibilities.
-- [Setup research and upstream plan](https://github.com/jokroese/decidim-lab/blob/main/research/organisation-setup.md): evidence, proposed contributions and their status.
+- [Setup research and upstream plan](https://github.com/supercollective-io/decidim-lab/blob/main/research/organisation-setup.md): evidence, proposed contributions and their status.
 - [Upstream decisions](UPSTREAM.md): why this project maintains an image and when to revisit it.
 - [Dependency audit](DEPENDENCY-AUDIT.md): dated findings and follow-up work.
 - [Decidim 0.32.1 release](https://github.com/decidim/decidim/releases/tag/v0.32.1) and [versioned installation guidance](https://github.com/decidim/decidim/blob/v0.32.1/docs/modules/install/pages/index.adoc).

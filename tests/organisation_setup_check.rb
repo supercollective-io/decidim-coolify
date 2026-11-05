@@ -47,7 +47,7 @@ begin
     setup_assert(!sign_in.text.include?("Outgoing email"), "email instructions must not appear before sign-in")
     setup_assert(sign_in.at_css('#admin_email')["autocomplete"] == "username", "email must support password managers")
     setup_assert(sign_in.at_css('#admin_password')["autocomplete"] == "current-password", "password must support password managers")
-    setup_assert(sign_in.at_css('a[href="https://github.com/jokroese/decidim-coolify#find-your-setup-credentials"]'), "credential help must link to the specific procedure")
+    setup_assert(sign_in.at_css('a[href="https://github.com/supercollective-io/decidim-coolify#find-your-setup-credentials"]'), "credential help must link to the specific procedure")
     setup_assert(!session.response.body.include?(ENV.fetch("INITIAL_SYSTEM_ADMIN_PASSWORD")), "bootstrap password must not be rendered")
 
     session.post "/system/admins/sign_in", params: {

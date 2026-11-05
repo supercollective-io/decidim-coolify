@@ -46,6 +46,7 @@ Smoke tests do not establish working Coolify routing, real email delivery or rec
 
 ## Documentation and handover
 
+- Write collective-facing setup and operations for people without server administration experience or an assumed technical helper. Give concrete choices, explain unfamiliar terms and show how to recognise success. Reuse suitable upstream guides; document remaining usability gaps rather than making expert assistance a permanent prerequisite. See [setup guidance](CONTRIBUTING.md#keep-setup-guidance-maintainable).
 - Keep collective-facing instructions focused on actions and outcomes; put implementation details in contributor or technical documentation. Update affected references and examples when configuration changes.
 - For stateful changes, document migration and recovery requirements using [Upgrades and rollback](docs/OPERATIONS.md#upgrades-and-rollback). An image rollback alone may not undo schema or data changes.
 - Follow the existing lower-case, scoped Conventional Commit style, for example `docs(agents): add repository guidance`.
