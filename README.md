@@ -128,7 +128,7 @@ Create or open a project and environment in Coolify, then add an **Application f
 
 | Setting | Value |
 | --- | --- |
-| Repository | `https://github.com/jokroese/decidim-coolify` |
+| Repository | `https://github.com/supercollective-io/decidim-coolify` |
 | Branch | `main` |
 | Server | **localhost** for the recommended one-server setup; your connected server if using Cloud or a separate server |
 | Build strategy | **Docker Compose** |
@@ -236,10 +236,10 @@ For help, record what you tried, the time and the error message. Remove password
 
 ## Updating an existing first attempt
 
-Follow [the earlier-pilot upgrade procedure](docs/OPERATIONS.md#updating-an-earlier-pilot), including the Rails secret check **before reloading the configuration**. Keep your existing domain, credentials and stored data. Follow the [release notes](https://github.com/jokroese/decidim-coolify/releases) for what changes in each published image.
+Follow [the earlier-pilot upgrade procedure](docs/OPERATIONS.md#updating-an-earlier-pilot), including the Rails secret check **before reloading the configuration**. Keep your existing domain, credentials and stored data. Follow the [release notes](https://github.com/supercollective-io/decidim-coolify/releases) for what changes in each published image.
 
 ## Help improve this project
 
-Tried the setup guide? [Share your experience in an issue](https://github.com/jokroese/decidim-coolify/issues). Tell us what you wanted to do, how far you got, what was confusing and roughly how long it took. We'd also like to hear what would make Decidim more useful for your collective. Plain language is welcome; no technical diagnosis is needed. Leave out passwords and personal data.
+Tried the setup guide? [Share your experience in an issue](https://github.com/supercollective-io/decidim-coolify/issues). Tell us what you wanted to do, how far you got, what was confusing and roughly how long it took. We'd also like to hear what would make Decidim more useful for your collective. Plain language is welcome; no technical diagnosis is needed. Leave out passwords and personal data.
 
-[Contributing](CONTRIBUTING.md) covers development and the remaining setup checks. Broader research and experiments live in [Decidim Lab](https://github.com/jokroese/decidim-lab).
+[Contributing](CONTRIBUTING.md) covers development and the remaining setup checks. Broader research and experiments live in [Decidim Lab](https://github.com/supercollective-io/decidim-lab).

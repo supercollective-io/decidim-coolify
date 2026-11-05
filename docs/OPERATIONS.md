@@ -45,6 +45,14 @@ Keep these application secrets stable across redeployments and restores:
 
 Preserve the database and Redis credentials, SMTP credentials, administrator bootstrap values, the canonical hostname and Coolify's generated variable names too. Losing or replacing encryption keys can make encrypted application data unreadable. Losing **SECRET_KEY_BASE** invalidates sessions and other signed/encrypted Rails data.
 
+## Repository ownership change
+
+The maintained repository is now `https://github.com/supercollective-io/decidim-coolify`. For an existing installation, update the repository source in the existing Coolify Application. If it uses a GitHub App, confirm that app has access to the transferred repository in the new organisation. Confirm Coolify can read the selected branch before deploying.
+
+Keep the existing Application, domain, secrets and storage volumes. The ownership change alone requires no database migration or secret rotation. Do not recreate the Application to change its repository URL.
+
+Once maintainers have published, verified and pinned the new organisation's image, follow [Deploying a reviewed upgrade](#deploying-a-reviewed-upgrade). Record the previous deployment commit and image digest for rollback. Until then, the committed Compose definition intentionally uses the old public image package. Retain access to that package for rollback; a repository redirect does not redirect image pulls.
+
 ## Backups
 
 Back up **daily** to storage outside the Coolify host. Each dated backup set must contain:

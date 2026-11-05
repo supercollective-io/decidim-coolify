@@ -2,7 +2,7 @@
 
 This document defines the maintained system sign-in and organisation creation behaviour, the local implementation and the checks needed when upgrading Decidim. The [setup guide](../README.md#set-up) is for people installing the platform.
 
-The [research and upstream contribution plan](https://github.com/jokroese/decidim-lab/blob/main/research/organisation-setup.md) lives in decidim-lab. Keep evidence, comparative designs and contribution tracking there; keep the behaviour contract, regression tests and removal of local overrides with this application. Source changes require a new image release before installations receive them.
+The [research and upstream contribution plan](https://github.com/supercollective-io/decidim-lab/blob/main/research/organisation-setup.md) lives in decidim-lab. Keep evidence, comparative designs and contribution tracking there; keep the behaviour contract, regression tests and removal of local overrides with this application. Source changes require a new image release before installations receive them.
 
 ## Behaviour and acceptance criteria
 

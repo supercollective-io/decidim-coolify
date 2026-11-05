@@ -4,7 +4,7 @@ Help collectives set up and maintain Decidim with less technical work. Keep the 
 
 ## Project boundaries
 
-This repository owns the maintained deployment, editable development environment, build tools and regression tests. [Decidim Lab](https://github.com/jokroese/decidim-lab) owns research, comparative benchmarks and experiments. The lab records the product commit or image under investigation and reuses `bin/dev` and `bin/check`; it does not maintain a second product development stack.
+This repository owns the maintained deployment, editable development environment, build tools and regression tests. [Decidim Lab](https://github.com/supercollective-io/decidim-lab) owns research, comparative benchmarks and experiments. The lab records the product commit or image under investigation and reuses `bin/dev` and `bin/check`; it does not maintain a second product development stack.
 
 When an experiment becomes maintained behaviour, keep its implementation and regression tests here. Keep the investigation and comparative results in the lab. Workshop facilitation materials remain in decidim-fest-2026.
 
@@ -121,7 +121,7 @@ For optional Ruby style and security checks, run the application's `bin/ci` insi
 | Development environment or command launchers | Quick checks plus clean startup, edits, restart and worktree-isolation checks |
 | Coolify setup, email or recovery | Complete the affected procedure on an isolated installation and record the result |
 
-Include the problem, resulting behaviour and any setup changes a collective must make in your contribution. Link the relevant [CI run](https://github.com/jokroese/decidim-coolify/actions/workflows/images.yml) for automated results. Record manual checks and remaining limits in the PR description or release notes; identify the tested revision/image and architecture for runtime or deployment checks. Keep durable procedures and known limitations in the relevant guide, rather than maintaining a test-run diary.
+Include the problem, resulting behaviour and any setup changes a collective must make in your contribution. Link the relevant [CI run](https://github.com/supercollective-io/decidim-coolify/actions/workflows/images.yml) for automated results. Record manual checks and remaining limits in the PR description or release notes; identify the tested revision/image and architecture for runtime or deployment checks. Keep durable procedures and known limitations in the relevant guide, rather than maintaining a test-run diary.
 
 ## Source and generated files
 
@@ -177,6 +177,15 @@ For maintainers with repository and registry publishing access. Publish and pin 
 5. Dependabot checks for new versions on its daily weekday schedule and opens a PR updating the shared image's version tag and digest. Review the release notes, published-image smoke results and PR checks, then merge it. No image reference needs copying into Compose. The `deployment-compose` artefact remains available for a standalone installation. This deployment commit does not need another image-release tag.
 6. Give the person applying the update the repository URL, deployment branch, exact deployment commit and release notes. Include required settings or migration actions. They follow the [manual deployment procedure](docs/OPERATIONS.md#deploying-a-reviewed-upgrade).
 
+### Completing the organisation transfer
+
+The repositories now belong to `supercollective-io`. The existing image pin remains under `ghcr.io/jokroese/decidim-coolify` until a replacement is published and verified. GitHub repository redirects do not move GHCR packages between owners.
+
+1. Check the organisation allows the workflow to publish packages and that the required `CI` check remains enabled in branch protection. Publish a reviewed versioned release using the procedure above.
+2. Make `ghcr.io/supercollective-io/decidim-coolify` public and verify pulls without registry credentials. Verify the published digest on both supported architectures.
+3. Use `python3 pin_release.py IMAGE_REFERENCE` with the complete new version tag and verified digest from the publication artefact. Run `bin/check quick` and review the Compose change before merging. This first namespace change is manual: Dependabot updates versions within a package, not its owner. Its configuration already selects the new namespace.
+4. Keep the old public package and pinned digests available for existing installations and rollback. Follow [the installation transfer procedure](docs/OPERATIONS.md#repository-ownership-change) for existing Coolify applications.
+
 ### Automatic image updates
 
 [Dependabot](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependabot-version-updates) is GitHub's maintained dependency-update service. The [.github/dependabot.yml](.github/dependabot.yml) configuration enables its Docker Compose support when present on the default branch. It checks only this project's application image; PostgreSQL and Redis upgrades remain separate maintenance work. It needs no custom updater, personal access token or extra GitHub Actions write permissions.
@@ -192,7 +201,7 @@ Checks run daily on weekdays; publication does not create a PR immediately. This
 - [Configuration](docs/CONFIGURATION.md): required values, defaults and generated credentials.
 - [Operations](docs/OPERATIONS.md): deployment, backups, recovery and maintenance checks.
 - [Organisation setup contract](docs/ORGANISATION-SETUP.md): behaviour, tests and local override responsibilities.
-- [Setup research and upstream plan](https://github.com/jokroese/decidim-lab/blob/main/research/organisation-setup.md): evidence, proposed contributions and their status.
+- [Setup research and upstream plan](https://github.com/supercollective-io/decidim-lab/blob/main/research/organisation-setup.md): evidence, proposed contributions and their status.
 - [Upstream decisions](UPSTREAM.md): why this project maintains an image and when to revisit it.
 - [Dependency audit](DEPENDENCY-AUDIT.md): dated findings and follow-up work.
 - [Decidim 0.32.1 release](https://github.com/decidim/decidim/releases/tag/v0.32.1) and [versioned installation guidance](https://github.com/decidim/decidim/blob/v0.32.1/docs/modules/install/pages/index.adoc).

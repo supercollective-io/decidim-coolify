@@ -2,7 +2,7 @@
 
 Use the repository-built application image for this Coolify deployment. It packages the committed Rails application, aligned Ruby and frontend dependencies, runtime configuration, jobs, persistence and deployment checks. See [Contributing](CONTRIBUTING.md) for development, verification and releases.
 
-Prefer supported upstream behaviour and keep local changes small. The [historical Docker investigation](https://github.com/jokroese/decidim-lab/blob/main/research/upstream-docker/UPSTREAM.md) and [organisation setup contribution plan](https://github.com/jokroese/decidim-lab/blob/main/research/organisation-setup.md) live in decidim-lab. Open proposals and experimental patches are not dependencies of the maintained deployment.
+Prefer supported upstream behaviour and keep local changes small. The [historical Docker investigation](https://github.com/supercollective-io/decidim-lab/blob/main/research/upstream-docker/UPSTREAM.md) and [organisation setup contribution plan](https://github.com/supercollective-io/decidim-lab/blob/main/research/organisation-setup.md) live in decidim-lab. Open proposals and experimental patches are not dependencies of the maintained deployment.
 
 ## When to reconsider
 

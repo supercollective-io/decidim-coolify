@@ -8,7 +8,7 @@
 
 <% if !setup_sign_in_page? && setup_first_run? %>
   <% guide = link_to t(".our_getting_started_guide"),
-                     "https://github.com/jokroese/decidim-coolify#set-up",
+                     "https://github.com/supercollective-io/decidim-coolify#set-up",
                      target: "_blank", rel: "noopener noreferrer" %>
 
   <%= cell "decidim/announcement", t(".no_organization_warning_html", guide:), callout_class: "warning" %>

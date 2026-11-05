@@ -5,10 +5,10 @@ updates:
     schedule:
       interval: daily
     allow:
-      - dependency-name: jokroese/decidim-coolify
+      - dependency-name: supercollective-io/decidim-coolify
     # Our own release images have already passed both architecture test jobs.
     cooldown:
       exclude:
-        - jokroese/decidim-coolify
+        - supercollective-io/decidim-coolify
     commit-message:
       prefix: build(coolify)
