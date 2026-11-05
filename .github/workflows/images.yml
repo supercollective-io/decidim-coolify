@@ -228,7 +228,8 @@ jobs:
       group: application-image-update-pr
       cancel-in-progress: false
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
     steps:
       - name: Check out current main
         uses: actions/checkout@v6
@@ -253,16 +254,6 @@ jobs:
             echo 'Source has been superseded; no update PR was changed.' >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Create repository-scoped App token
-        if: steps.current.outputs.current == 'true'
-        id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
-        with:
-          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-
       - name: Select the tested image
         if: steps.current.outputs.current == 'true'
         env:
@@ -275,7 +266,7 @@ jobs:
         if: steps.current.outputs.current == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
-          token: ${{ steps.app.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           base: main
           branch: update-application-image
           add-paths: compose.yaml
@@ -287,7 +278,7 @@ jobs:
             Image: `${{ needs.publish.outputs.image }}`
 
             Both native architecture checks passed in [the publication run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
-            This PR checks the selected digest with the current Compose configuration again.
+            Approve the workflow runs on this PR to check the selected digest with the current Compose configuration again.
 
             Review application changes and any migration or configuration requirements before merging.
             Merging selects the release for installation; Coolify deployment remains manual.
