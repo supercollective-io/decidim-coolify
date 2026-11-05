@@ -10,20 +10,23 @@ on:
       - 'v*'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+  # Do not let a docs-only push cancel the last application publication.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
   changes:
-    name: Detect documentation-only changes
+    name: Select source and deployment checks
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: read
     outputs:
+      compose: ${{ steps.filter.outputs.compose }}
+      publish: ${{ github.event_name != 'pull_request' }}
       images: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || steps.filter.outputs.images == 'true' }}
     steps:
       - name: Check out source
@@ -36,16 +39,19 @@ jobs:
         with:
           base: ${{ github.ref }}
           predicate-quantifier: every
-          # Only prose outside the application is exempt; unknown paths run CI.
+          # Compose changes test the pinned image; unknown paths build anew.
           filters: |
             images:
               - '!*.md'
               - '!docs/**/*.md'
+              - '!compose.yaml'
+            compose:
+              - 'compose.yaml'
 
   docs:
     name: Documentation checks
     needs: changes
-    if: needs.changes.outputs.images != 'true'
+    if: needs.changes.outputs.images != 'true' && needs.changes.outputs.compose != 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -57,7 +63,7 @@ jobs:
   quick:
     name: Quick checks
     needs: changes
-    if: needs.changes.outputs.images == 'true'
+    if: needs.changes.outputs.images == 'true' || needs.changes.outputs.compose == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -82,88 +88,74 @@ jobs:
           CHECK_TOOL_IMAGE: decidim-coolify:tools-${{ github.run_id }}-${{ github.run_attempt }}
 
   test:
+    name: Read-only image checks
     needs: [changes, quick]
-    if: needs.changes.outputs.images == 'true'
-    name: Build and smoke-test (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # First deployment target: x86-64 AMD on Hetzner CPX41.
-          - arch: amd64
-            runner: ubuntu-24.04
-            platform: linux/amd64
-          # Native ARM64 CI is portability coverage; production starts on x86-64.
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            platform: linux/arm64
+    if: needs.changes.outputs.compose == 'true' && needs.changes.outputs.images != 'true' || github.event_name == 'pull_request' && needs.changes.outputs.images == 'true'
     permissions:
       contents: read
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v6
+    uses: ./.github/workflows/verify-image.yml
+    with:
+      build: ${{ needs.changes.outputs.images == 'true' }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build production image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          target: app
-          platforms: ${{ matrix.platform }}
-          tags: decidim-coolify:test-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
-          load: true
-          cache-from: type=gha,scope=smoke-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=smoke-${{ matrix.arch }}
-
-      - name: Verify the built image and disposable stack
-        run: bin/check image --image "$TEST_IMAGE" --platform "$TEST_PLATFORM"
-        env:
-          TEST_IMAGE: decidim-coolify:test-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
-          TEST_PLATFORM: ${{ matrix.platform }}
+  candidates:
+    name: Build and verify registry candidates
+    needs: [changes, quick]
+    if: needs.changes.outputs.images == 'true' && needs.changes.outputs.publish == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/verify-image.yml
+    with:
+      build: true
+      publish: true
 
   ci:
     name: CI
     if: always()
-    needs: [changes, docs, quick, test]
+    needs: [changes, docs, quick, test, candidates]
     runs-on: ubuntu-24.04
     steps:
       - name: Check required results
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
-          IMAGES_REQUIRED: ${{ needs.changes.outputs.images }}
+          IMAGES_REQUIRED: ${{ needs.changes.outputs.images == 'true' || needs.changes.outputs.compose == 'true' }}
           DOCS_RESULT: ${{ needs.docs.result }}
           QUICK_RESULT: ${{ needs.quick.result }}
           TEST_RESULT: ${{ needs.test.result }}
+          CANDIDATES_REQUIRED: ${{ needs.changes.outputs.images == 'true' && needs.changes.outputs.publish == 'true' }}
+          CANDIDATES_RESULT: ${{ needs.candidates.result }}
         run: |
           test "$CHANGES_RESULT" = success
           if [ "$IMAGES_REQUIRED" = true ]; then
             test "$DOCS_RESULT" = skipped
             test "$QUICK_RESULT" = success
-            test "$TEST_RESULT" = success
+            if [ "$CANDIDATES_REQUIRED" = true ]; then
+              test "$TEST_RESULT" = skipped
+              test "$CANDIDATES_RESULT" = success
+            else
+              test "$TEST_RESULT" = success
+              test "$CANDIDATES_RESULT" = skipped
+            fi
           else
             test "$DOCS_RESULT" = success
             test "$QUICK_RESULT" = skipped
             test "$TEST_RESULT" = skipped
+            test "$CANDIDATES_RESULT" = skipped
           fi
 
   publish:
-    name: Publish versioned multi-architecture image
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
-    needs: test
+    name: Publish tested multi-architecture image
+    needs: [changes, ci, candidates]
+    if: needs.changes.outputs.images == 'true' && needs.changes.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
+    outputs:
+      image: ${{ steps.publish.outputs.image }}
     steps:
       - name: Check out source
         uses: actions/checkout@v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -172,19 +164,15 @@ jobs:
         id: image
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-      - name: Select immutable source and optional version tags
-        id: tags
-        env:
-          IMAGE_NAME: ${{ steps.image.outputs.name }}
-        run: |
-          {
-            echo 'values<<TAGS'
-            echo "$IMAGE_NAME:sha-$GITHUB_SHA"
-            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-              echo "$IMAGE_NAME:$GITHUB_REF_NAME"
-            fi
-            echo 'TAGS'
-          } >> "$GITHUB_OUTPUT"
+      - name: Generate release tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=tag
+          flavor: latest=false
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -193,56 +181,113 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish multi-architecture image
-        id: publish
-        uses: docker/build-push-action@v7
+      - name: Download tested digests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          context: .
-          file: Dockerfile
-          target: app
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.tags.outputs.values }}
-          # Reuse the native builds that passed the test jobs, as well as any
-          # previous publication cache. Cache misses still rebuild normally.
-          cache-from: |
-            type=gha,scope=publish
-            type=gha,scope=smoke-amd64
-            type=gha,scope=smoke-arm64
-          cache-to: type=gha,mode=max,scope=publish
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.ref_name }}
-          sbom: true
-          provenance: mode=max
+          pattern: digest-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/digests
 
-
-      - name: Prepare pinned deployment configuration
+      - name: Assemble tested images without rebuilding
+        id: publish
         env:
           IMAGE_NAME: ${{ steps.image.outputs.name }}
-          IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            image_ref="$IMAGE_NAME:$GITHUB_REF_NAME@$IMAGE_DIGEST"
-          else
-            image_ref="$IMAGE_NAME:sha-$GITHUB_SHA@$IMAGE_DIGEST"
-          fi
-          python3 pin_release.py "$image_ref"
+          args=()
+          while IFS= read -r tag; do args+=(--tag "$tag"); done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" \
+            --metadata-file "$RUNNER_TEMP/published.json" \
+            "$(cat "$RUNNER_TEMP/digests/amd64")" \
+            "$(cat "$RUNNER_TEMP/digests/arm64")"
+          digest=$(jq -er '.["containerimage.digest"]' "$RUNNER_TEMP/published.json")
+          docker buildx imagetools inspect "$IMAGE_NAME@$digest" --raw > "$RUNNER_TEMP/manifest.json"
+          jq -e '[.manifests[].platform | select(.os == "linux") | .architecture] | sort == ["amd64", "arm64"]' "$RUNNER_TEMP/manifest.json"
+          image="$IMAGE_NAME:sha-$GITHUB_SHA@$digest"
+          python3 pin_release.py "$image"
           python3 validate.py
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          printf 'Published tested image: `%s`\n\nSource: `%s`\n\nPublication does not deploy.\n' \
+            "$image" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload deployment configuration
+      - name: Upload matching deployment configuration
         uses: actions/upload-artifact@v4
         with:
           name: deployment-compose
           path: compose.yaml
           if-no-files-found: error
+          overwrite: true
 
-      - name: Report image for the deployment commit
+  propose:
+    name: Propose the tested image on main
+    needs: publish
+    # Tags and manual builds on other branches publish for testing only.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: application-image-update-pr
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Reject a superseded application build
+        id: current
         env:
-          IMAGE_NAME: ${{ steps.image.outputs.name }}
-          IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+          SOURCE_REVISION: ${{ github.sha }}
         run: |
-          printf '## Published application image\n\n`%s@%s`\n\n' "$IMAGE_NAME" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
-          printf '%s\n' 'Dependabot checks version-tagged releases on its configured schedule and proposes the version and digest update. Review and merge its PR. The deployment-compose artefact is also available for recovery or a standalone installation.' >> "$GITHUB_STEP_SUMMARY"
-          printf '%s\n' 'Publication does not deploy. Use the manual maintenance procedure in docs/OPERATIONS.md.' >> "$GITHUB_STEP_SUMMARY"
+          # Compose is tested again in the update PR. Prose and image-selection
+          # commits may advance main without invalidating the application build.
+          if git diff --quiet "$SOURCE_REVISION" HEAD -- . \
+            ':(top,exclude)compose.yaml' ':(top,glob,exclude)*.md' \
+            ':(top,glob,exclude)docs/**/*.md'; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            status=$?
+            if [ "$status" -ne 1 ]; then exit "$status"; fi
+            echo 'Source has been superseded; no update PR was changed.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Create repository-scoped App token
+        if: steps.current.outputs.current == 'true'
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Select the tested image
+        if: steps.current.outputs.current == 'true'
+        env:
+          IMAGE_REFERENCE: ${{ needs.publish.outputs.image }}
+        run: |
+          python3 pin_release.py "$IMAGE_REFERENCE"
+          python3 validate.py
+
+      - name: Create or update the release selection PR
+        if: steps.current.outputs.current == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ steps.app.outputs.token }}
+          base: main
+          branch: update-application-image
+          add-paths: compose.yaml
+          commit-message: 'build(coolify): select tested application image'
+          title: 'build(coolify): select tested application image'
+          body: |
+            Select the application image built from `${{ github.sha }}`.
+
+            Image: `${{ needs.publish.outputs.image }}`
+
+            Both native architecture checks passed in [the publication run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+            This PR checks the selected digest with the current Compose configuration again.
+
+            Review application changes and any migration or configuration requirements before merging.
+            Merging selects the release for installation; Coolify deployment remains manual.

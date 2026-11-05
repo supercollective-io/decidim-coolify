@@ -1,0 +1,114 @@
+name: Verify application image
+
+on:
+  workflow_call:
+    inputs:
+      build:
+        description: Build source instead of testing the committed Compose pin
+        type: boolean
+        required: true
+      publish:
+        description: Push registry candidates before testing (trusted callers only)
+        type: boolean
+        default: false
+
+jobs:
+  verify:
+    name: Verify image (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # First deployment target: x86-64 AMD on Hetzner CPX41.
+          - arch: amd64
+            runner: ubuntu-24.04
+            platform: linux/amd64
+          # Native ARM64 CI is portability coverage; production starts on x86-64.
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Derive GHCR image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate source metadata
+        if: inputs.build
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: type=sha,format=long
+          flavor: latest=false
+
+      - name: Log in to GHCR
+        if: inputs.build && inputs.publish
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build production image once
+        if: inputs.build
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: app
+          platforms: ${{ matrix.platform }}
+          # Candidates are not deployment releases. Test their registry digest
+          # before assigning source/version tags or proposing a Compose update.
+          tags: ${{ steps.image.outputs.name }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+          push: ${{ inputs.publish }}
+          load: ${{ !inputs.publish }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: ${{ inputs.publish }}
+          provenance: ${{ inputs.publish && 'mode=max' || 'false' }}
+          cache-from: type=gha,scope=smoke-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=smoke-${{ matrix.arch }}
+
+      - name: Verify the selected image and disposable stack
+        env:
+          BUILD_IMAGE: ${{ inputs.build }}
+          PUBLISH: ${{ inputs.publish }}
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_ID: ${{ steps.build.outputs.imageid }}
+          TEST_PLATFORM: ${{ matrix.platform }}
+        run: |
+          if [ "$BUILD_IMAGE" != true ]; then
+            image=$(python3 -c 'from pathlib import Path; from pin_release import image_reference; print(image_reference(Path("compose.yaml").read_text()))')
+          elif [ "$PUBLISH" = true ]; then
+            image="$IMAGE_NAME@$IMAGE_DIGEST"
+          else
+            image="$IMAGE_ID"
+          fi
+          bin/check image --image "$image" --platform "$TEST_PLATFORM"
+
+      - name: Record tested registry digest
+        if: inputs.build && inputs.publish
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          printf '%s@%s' "$IMAGE_NAME" "$IMAGE_DIGEST" > "$RUNNER_TEMP/digests/$ARCH"
+
+      - name: Upload tested digest
+        if: inputs.build && inputs.publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7

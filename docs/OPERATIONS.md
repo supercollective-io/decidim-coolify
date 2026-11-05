@@ -6,7 +6,7 @@ These procedures require Docker Compose and server administration experience. Th
 
 ## Before the first installation
 
-The deployment configuration pins a published image by version and digest. Coolify can pull it anonymously for Linux amd64 or ARM64. Maintainers follow the [release procedure](../CONTRIBUTING.md#publishing-a-release) for subsequent versions; collectives do not build or publish images.
+The deployment configuration pins a published image by source-commit or version tag and immutable digest. Coolify can pull it anonymously for Linux amd64 or ARM64. Maintainers follow the [release procedure](../CONTRIBUTING.md#publishing-a-release) for subsequent versions; collectives do not build or publish images.
 
 On the target Coolify instance, verify the [setup instructions](../README.md#set-up), generated variables, persistent volumes and public HTTPS route. Record the Coolify version, deployment revision and supported server architecture. Use the [provisional server recommendation](../README.md#1-get-a-server-from-hetzner) for the initial pilot. It has not yet been validated by capacity testing.
 

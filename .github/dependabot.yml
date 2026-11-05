@@ -1,14 +1,10 @@
 version: 2
 updates:
-  - package-ecosystem: docker-compose
+  # Application image PRs come directly from the successful publication run.
+  # Keep the third-party workflow actions (including commit pins) maintained.
+  - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: daily
-    allow:
-      - dependency-name: supercollective-io/decidim-coolify
-    # Our own release images have already passed both architecture test jobs.
-    cooldown:
-      exclude:
-        - supercollective-io/decidim-coolify
+      interval: weekly
     commit-message:
-      prefix: build(coolify)
+      prefix: ci(deps)

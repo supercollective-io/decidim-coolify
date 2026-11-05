@@ -27,7 +27,7 @@ Read the documents relevant to the change:
 ## Repository constraints and pitfalls
 
 - `app/` is the committed Rails host application; Decidim comes from locked upstream gems and frontend packages. Normal builds do not regenerate the application.
-- Git owns the shared, version-and-digest-pinned image for web, worker and scheduler. Coolify owns installation settings and secrets. Collectives must not need to build or publish their own image.
+- Git owns the shared, tag-and-digest-pinned image for web, worker and scheduler. Coolify owns installation settings and secrets. Collectives must not need to build or publish their own image.
 - Keep the Coolify web domain as the single public-URL source. Fix domain propagation instead of introducing another setting to keep in sync.
 - Preserve installed migration filenames. Follow [Preparing a Decidim upgrade](CONTRIBUTING.md#preparing-a-decidim-upgrade) for dependency and migration changes; do not delete and regenerate migrations.
 - Use root `bin/dev` for the editable environment and `bin/check` for verification. Application-level generated setup scripts are not an alternative workflow.
