@@ -3,8 +3,11 @@
 Actionlint checks the workflow schema separately. These tests exercise failure
 propagation and stale-source behaviour without GitHub or registry credentials.
 """
+import json
 import os
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -45,6 +48,37 @@ class RequiredResultsTests(unittest.TestCase):
                 for failure in ("failure", "cancelled", "skipped"):
                     with self.subTest(image_checks=image_checks, candidates=candidates, field=field, result=failure):
                         self.assertNotEqual(execute(script, ROOT, dict(success, **{field: failure})).returncode, 0)
+
+
+@unittest.skipUnless(shutil.which("jq"), "publication metadata checks require jq (available in CI)")
+class PublicationMetadataTests(unittest.TestCase):
+    def digest(self, metadata):
+        script = shell_step("Assemble tested images without rebuilding")
+        query = re.search(r'''digest=\$\(jq -er '([^']+)' "\$RUNNER_TEMP/published.json"\)''', script)
+        self.assertIsNotNone(query, "cannot find publication digest extraction")
+        return subprocess.run(["jq", "-er", query.group(1)], input=json.dumps(metadata),
+                              text=True, capture_output=True)
+
+    def test_reads_imagetools_create_descriptor(self):
+        # Docker's documented imagetools create --metadata-file output differs
+        # from build metadata: https://docs.docker.com/reference/cli/docker/buildx/imagetools/create/
+        digest = "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3"
+        result = self.digest({
+            "containerimage.descriptor": {
+                "mediaType": "application/vnd.oci.image.index.v1+json",
+                "digest": digest,
+                "size": 4654,
+            },
+            "image.name": "docker.io/user/app",
+        })
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), digest)
+
+    def test_missing_publication_descriptor_fails(self):
+        for metadata in ({}, {"containerimage.descriptor": {}},
+                         {"containerimage.digest": "sha256:" + "a" * 64}):
+            with self.subTest(metadata=metadata):
+                self.assertNotEqual(self.digest(metadata).returncode, 0)
 
 
 class CurrentSourceTests(unittest.TestCase):
