@@ -1,16 +1,22 @@
 # Configuration reference
 
-For developers and technical helpers. Collectives can use the required settings in [Set up](../README.md#set-up).
+Detailed settings and troubleshooting reference. For the guided installation, start with [Set up](../README.md#set-up).
 
 [compose.yaml](../compose.yaml) defines runtime mappings and defaults. Set installation values in Coolify. [.env.example](../.env.example) is an interpolation example for local Compose; its placeholders are not credentials. Copying it does not generate secrets or start a working installation.
 
 ## First-run settings
 
+The currently pinned pilot image supports initial system sign-in without email, but does not include the newer deferred organisation invitation behaviour described below. For that image, [connect email](../README.md#connect-email) before creating an organisation. The [setup behaviour contract](ORGANISATION-SETUP.md) describes the source implementation awaiting release.
+
 Set the required `SYSTEM_ADMIN_EMAIL` to the initial system administrator's email address, and configure the web domain as described below. Compose rejects an empty administrator email or generated public URL before starting containers. The administrator is created only if no system administrator exists. Changing the bootstrap settings does not change an existing account.
 
-Email is optional for initial setup. Leave `SMTP_ADDRESS`, `SMTP_USERNAME` and `SMTP_PASSWORD` empty together. When any is supplied, all three are required. The startup check reports incomplete settings together before loading Rails. With no SMTP settings, the system administrator screens show a notice and email delivery raises an explicit error; the initial organisation administrator invitation is saved without a delivery job and can be sent with **Resend invitation** after configuration. Other queued delivery jobs can retry after configuration is completed. It does not use a log-only or silently successful mail backend.
+Email is optional for initial setup. Leave `SMTP_ADDRESS`, `SMTP_USERNAME` and `SMTP_PASSWORD` empty together. When any is supplied, all three are required. The startup check reports incomplete settings together before loading Rails. With no SMTP settings, the system administrator screens show a notice and email delivery raises an explicit error. Other queued delivery jobs can retry after configuration is completed. It does not use a log-only or silently successful mail backend.
+
+In the source implementation awaiting release, the initial organisation administrator invitation is saved without a delivery job and can be sent with **Resend invitation** after configuration. This deferral is unavailable in the currently pinned image; complete email setup before creating its first organisation.
 
 ## Email settings
+
+For the recommended Resend setup, follow [Connect email](../README.md#connect-email). It includes Namecheap domain verification, a sending API key and the exact Coolify values. The reference below also applies to other SMTP providers.
 
 | Setting | Meaning |
 | --- | --- |
@@ -20,7 +26,7 @@ Email is optional for initial setup. Leave `SMTP_ADDRESS`, `SMTP_USERNAME` and `
 | `DECIDIM_MAILER_SENDER` | Defaults to `no-reply@` followed by the public URL hostname. Override with an address authorised by the provider. Organisation email settings inherit this value when blank; override the organisation sender only when a different authorised address is needed. |
 | `SMTP_DOMAIN` | Defaults to the public URL hostname. Override if the provider requires another SMTP greeting domain. |
 
-Completing these settings enables SMTP; it does not prove deliverability. Test a real invitation before onboarding participants.
+Completing these settings enables SMTP; it does not prove deliverability. Test a real invitation before onboarding participants. If returning to setup without email, clear `SMTP_ADDRESS`, `SMTP_USERNAME` and `SMTP_PASSWORD` together. For providers requiring implicit TLS, use `SMTP_TLS=true` and `SMTP_PORT=465`; the default is STARTTLS on port 587.
 
 ## Domain
 

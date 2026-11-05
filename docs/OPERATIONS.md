@@ -1,6 +1,6 @@
 # Technical operations
 
-For developers and technical helpers responsible for a collective's installation. For the collective's responsibilities, read [Looking after your site](../OPERATIONS.md).
+Detailed procedures for maintaining a collective's installation. Start with [Looking after your site](../OPERATIONS.md) for routine actions.
 
 These procedures require Docker Compose and server administration experience. They have not yet been verified on a live Coolify installation. Complete the [deployment-readiness checks](../CONTRIBUTING.md#help-make-setup-ready) on the target installation.
 
@@ -8,9 +8,19 @@ These procedures require Docker Compose and server administration experience. Th
 
 The deployment configuration pins a published image by version and digest. Coolify can pull it anonymously for Linux amd64 or ARM64. Maintainers follow the [release procedure](../CONTRIBUTING.md#publishing-a-release) for subsequent versions; collectives do not build or publish images.
 
-On the target Coolify instance, verify the [setup instructions](../README.md#set-up), generated variables, persistent volumes and public HTTPS route. Record the Coolify version, deployment revision and supported server architecture. No minimum server capacity has been established.
+On the target Coolify instance, verify the [setup instructions](../README.md#set-up), generated variables, persistent volumes and public HTTPS route. Record the Coolify version, deployment revision and supported server architecture. Use the [provisional server recommendation](../README.md#1-get-a-server-from-hetzner) for the initial pilot. It has not yet been validated by capacity testing.
 
-Before collecting participant data, implement and test scheduled encrypted backups, failure reporting and an isolated restore. This repository supplies manual examples only. The helper must document the actual project context, off-server destination and secure method for exporting and restoring Coolify secrets; those installation-specific steps are not supplied here. Give the collective a way to check backup results and a contact for failures.
+Before collecting participant data, configure scheduled encrypted backups and failure reporting, and confirm that the jobs succeed. This repository supplies manual examples only. Document the actual project context, off-server destination and secure method for exporting and restoring Coolify secrets; those installation-specific steps are not supplied here. Give the collective a way to check backup results and a contact for failures. Maintainers must separately validate the restore procedure as part of deployment readiness; an isolated restore is not a step each collective must perform during initial setup.
+
+### Hosting arrangements
+
+The starting recommendation is one Hetzner server running self-hosted Coolify and the Decidim stack. Follow the [server and Coolify setup steps](../README.md#set-up), then deploy this project's Application to **localhost**. The provisional specification allows room for Coolify, the Rails web process, concurrent worker jobs, scheduled Rails tasks, PostgreSQL, Redis and the operating system. Disk space must also hold images, database growth and uploads. The prebuilt image avoids compilation on the server. This sizing is engineering judgement, not a measured minimum or a supported participant count; validate it under representative activity and monitor memory and disk usage before making stronger capacity claims.
+
+Coolify and Decidim share resources and availability in this arrangement. A server failure affects both. Include server maintenance, Coolify updates and recovery, and application operations in the maintenance schedule. For Coolify itself, use the upstream [update](https://coolify.io/docs/core/instance-management/update), [backup](https://coolify.io/docs/core/backup-and-recovery/instance-backup) and [restore](https://coolify.io/docs/core/backup-and-recovery/instance-restore) procedures. Keep instance backups off-server and preserve the instance encryption key separately. These backups are additional to the Decidim backup set below.
+
+**Coolify Cloud** is an alternative when the collective wants the Coolify team to maintain the dashboard. Follow its [setup guide](https://coolify.io/docs/start-with-cloud). The collective still provides and maintains the Decidim server and its data backups.
+
+**Separate self-hosted servers** are an advanced option when resource contention or the need to keep the dashboard available during application-server maintenance justifies the extra cost and administration. Install Coolify on one server, then follow [Add a server](https://coolify.io/docs/core/infrastructure/servers/add-server) to connect the Decidim server. Select that server when creating the Application and point the participation domain to it. Both servers need maintenance and recovery arrangements. Separating the dashboard does not provide a second running copy of Decidim or automatic failover. See Coolify's [server arrangements](https://coolify.io/docs/core/infrastructure/servers/overview).
 
 ## Deployment contract
 
@@ -49,6 +59,8 @@ Back up **daily** to storage outside the Coolify host. Each dated backup set mus
 The backup procedure below stops application writers; schedule it outside workshop hours. Verify backup capabilities for this Git-backed Compose Application on the installed Coolify version; do not assume standalone Database or Service backup controls apply. This package does not implement automatic backups. The operator must schedule and monitor the procedure, verify that the destination is off-server, and retain the decryption key separately from the backup destination. Generate or refresh the encrypted secrets export after every secret change; include the current export with the daily backup set. Never place plaintext secrets in shell history, logs, tickets or the off-server backup.
 
 ### Example for an operator-managed local Compose project
+
+The example below writes to a mounted off-server filesystem. Hetzner Object Storage, recommended in the collective-facing guide, uses S3 and is not a filesystem path: do not put a bucket URL in `BACKUP_DIR`. A workflow that uploads and verifies the complete encrypted backup set in Object Storage still needs to be implemented and tested; configuring Coolify's instance backup destination does not provide this for Decidim.
 
 These commands are for an operator deliberately managing a local Compose project. Replace each value with the actual project name, Compose file path and mounted off-server destination. The PROJECT and COMPOSE_FILE values are not supplied by this package.
 
@@ -141,6 +153,8 @@ If a command fails, the trap attempts to start Redis and the application roles. 
 
 ## Restore to an isolated application
 
+Use this for recovery after a serious failure or for a planned maintenance rehearsal. It is separate from initial installation and daily backup checks.
+
 Restore to a **new Git-backed Coolify Application with new, distinct volumes**. Never restore over production and never delete production volumes to make a restore work.
 
 1. Create an isolated recovery Application from the recorded deployment Git revision, with Auto Deploy and previews disabled, a unique Compose project and new database, Redis and uploads volumes. Use the exact image digest, Compose definition, secrets and canonical Decidim hostname from the backup.
@@ -201,7 +215,17 @@ Restoring Redis can replay pending or retryable jobs, including work that was in
 
 ## Upgrades and rollback
 
-Developers first [prepare and test the upgrade](../CONTRIBUTING.md#preparing-a-decidim-upgrade) and [publish the release](../CONTRIBUTING.md#publishing-a-release). The technical helper then follows this deployment procedure.
+Developers first [prepare and test the upgrade](../CONTRIBUTING.md#preparing-a-decidim-upgrade) and [publish the release](../CONTRIBUTING.md#publishing-a-release). The person applying the update then follows this deployment procedure.
+
+### Updating an earlier pilot
+
+Before reloading the Git Compose configuration, complete the [Rails secret upgrade check](CONFIGURATION.md#upgrading-the-rails-secret-from-the-first-pilot). The current generator meets Decidim's 128-character requirement; an existing installation must preserve or deliberately migrate its current secret. Renaming a generated variable is not a migration.
+
+Use the reviewed deployment revision in the procedure below. Preserve the saved web domain, generated credentials and volume identities. Previously entered SMTP values remain saved in Coolify: complete all three, or clear all three to return to setup without email. Configure email before creating an organisation on the currently pinned pilot image; deferred administrator invitations require the newer setup implementation to be released and pinned.
+
+Earlier configurations exposed an editable `APP_URL`. The current Compose mapping ignores that saved value and reads Coolify's domain-derived `SERVICE_URL_WEB`. Confirm that the web domain is the intended public address and set the required `SYSTEM_ADMIN_EMAIL`. Changing bootstrap variables does not update an existing administrator account.
+
+Missing required values are reported before containers start. Invalid values or incomplete optional SMTP settings are explained in the web runtime log. If the saved domain is not reflected in `SERVICE_URL_WEB`, record the Coolify version and investigate the [domain configuration](CONFIGURATION.md#domain); do not introduce a second public-URL setting.
 
 ### Deploying a reviewed upgrade
 
