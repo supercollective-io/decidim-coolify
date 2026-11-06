@@ -1,7 +1,7 @@
 # Git-backed Coolify Application; deploy manually from a reviewed Git revision.
 # Dependabot proposes version and digest updates for this shared image mapping.
 x-app-image: &app-image
-  image: ghcr.io/jokroese/decidim-coolify:v0.1.0-rc.1@sha256:3ec809133f230ee7ddd2aa28ea80fc9c13e16ffc83d84f462e70e1b30247598a
+  image: ghcr.io/supercollective-io/decidim-coolify:sha-7cbbaebf605245e7d3e91f1ec800f25f49832b4c@sha256:ee00a72406521a2b17bf147d465133f6d6d6526b62087b2951f497006a8269dc
 
 x-app-environment: &app-environment
   RAILS_ENV: production
